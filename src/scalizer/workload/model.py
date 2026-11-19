@@ -29,6 +29,16 @@ def sd_from_ci90(ci) -> float:
     return (high - low) / (2 * Z90)
 
 
+def draw_pair(rng: np.random.Generator, first, first_ci, second, second_ci,
+              correlation) -> tuple[float, float]:
+    """Draw two parameters from a bivariate normal distribution: each centred on
+    its value, with the spread of its 90% interval and the given correlation."""
+    z1, z2 = rng.standard_normal(2)
+    rho = min(max(correlation, -1.0), 1.0)
+    return (float(first + sd_from_ci90(first_ci) * z1),
+            float(second + sd_from_ci90(second_ci) * (rho * z1 + math.sqrt(1 - rho ** 2) * z2)))
+
+
 class CalibratedServiceModel:
     """interfaces.ServiceModel, built from calibration.json."""
 
@@ -54,24 +64,26 @@ class CalibratedServiceModel:
             saturation_cpu=c.error_model.saturation_cpu)
 
     def sample_parameters(self, rng: np.random.Generator) -> ModelParams:
-        """Parameters drawn within their 90% intervals, for one repeated run. The
-        order of the draws is fixed (CPU, latency, p95): the same seed gives the
-        same parameters. Error parameters are assumptions and are not sampled."""
+        """Parameters drawn within their 90% intervals, for one repeated run.
+
+        The two parameters of each model (a and b; rt_base and rt_queue; p95
+        base and queue) are estimated together and are correlated, so they are
+        drawn together from a bivariate normal distribution. The order of the
+        draws is fixed (CPU, latency, p95): the same seed gives the same
+        parameters. Error parameters are assumptions and are not sampled."""
         c = self.calibration
-
-        def draw(value, ci):
-            return float(rng.normal(value, sd_from_ci90(ci)))
-
-        updates = {"a": draw(c.cpu_model.a, c.cpu_model.a_ci90),
-                   "b": draw(c.cpu_model.b, c.cpu_model.b_ci90),
-                   "rt_base": draw(c.latency_model.rt_base, c.latency_model.rt_base_ci90),
-                   # the queue effect cannot be negative
-                   "rt_queue": max(0.0, draw(c.latency_model.rt_queue,
-                                             c.latency_model.rt_queue_ci90))}
+        a, b = draw_pair(rng, c.cpu_model.a, c.cpu_model.a_ci90, c.cpu_model.b,
+                         c.cpu_model.b_ci90, c.cpu_model.a_b_correlation)
+        lat = c.latency_model
+        rt_base, rt_queue = draw_pair(rng, lat.rt_base, lat.rt_base_ci90, lat.rt_queue,
+                                      lat.rt_queue_ci90, lat.rt_base_rt_queue_correlation)
+        updates = {"a": a, "b": b, "rt_base": rt_base,
+                   "rt_queue": max(0.0, rt_queue)}       # the queue effect cannot be negative
         p95 = c.p95_model
         if self._p95_observed:
-            updates["p95_base"] = draw(p95.p95_base, p95.p95_base_ci90)
-            updates["p95_queue"] = max(0.0, draw(p95.p95_queue, p95.p95_queue_ci90))
+            base, queue = draw_pair(rng, p95.p95_base, p95.p95_base_ci90, p95.p95_queue,
+                                    p95.p95_queue_ci90, p95.p95_base_p95_queue_correlation)
+            updates["p95_base"], updates["p95_queue"] = base, max(0.0, queue)
         else:
             updates["p95_k"] = float(rng.uniform(*p95.k_range))
         return self.nominal_parameters().model_copy(update=updates)

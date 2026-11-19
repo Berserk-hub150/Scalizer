@@ -103,6 +103,7 @@ class CpuModel(_Model):
     a_ci90: Interval
     b: float
     b_ci90: Interval
+    a_b_correlation: float = 0.0        # a and b are estimated together: drawn together
     load_per_instance_range: Interval   # outside it: an extrapolation
 
 
@@ -112,6 +113,7 @@ class LatencyModel(_Model):
     rt_base_ci90: Interval
     rt_queue: float
     rt_queue_ci90: Interval
+    rt_base_rt_queue_correlation: float = 0.0
     observed_cpu_max: float             # above it: an extrapolation
 
 
@@ -123,6 +125,7 @@ class P95Model(_Model):
     p95_base_ci90: Interval | None = None
     p95_queue: float | None = None
     p95_queue_ci90: Interval | None = None
+    p95_base_p95_queue_correlation: float = 0.0
     k: float | None = None
     k_range: Interval | None = None
     assumption: bool

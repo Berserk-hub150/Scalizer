@@ -65,6 +65,31 @@ def test_calibration_intervals_have_90_percent_coverage():
     assert 0.84 <= hits_b / runs <= 0.96
 
 
+def test_intervals_stay_honest_with_autocorrelated_noise():
+    # In real series a busy minute is followed by a busy minute: the noise is
+    # autocorrelated. Ordinary standard errors would cover the true value only
+    # about 30% of the time here; the Newey-West intervals keep about 90%.
+    rng = np.random.default_rng(7)
+    hits, runs = 0, 120
+    for _ in range(runs):
+        s = synthetic_clean()
+        noise = np.zeros(len(s))
+        shocks = rng.normal(0, 0.003, len(s))
+        for t in range(1, len(s)):
+            noise[t] = 0.9 * noise[t - 1] + shocks[t]          # AR(1), rho = 0.9
+        s["cpu"] = s["cpu"] + noise
+        c = calibrate(add_features(s))[0]["cpu_model"]
+        hits += c["a_ci90"][0] < A < c["a_ci90"][1]
+    assert 0.78 <= hits / runs <= 0.97
+
+
+def test_slope_and_intercept_correlation_is_stored():
+    models, _ = calibrate(add_features(synthetic_clean(noise=0.003)))
+    # x is positive, so a larger slope goes with a smaller intercept
+    assert -1 < models["cpu_model"]["a_b_correlation"] < -0.5
+    assert -1 <= models["latency_model"]["rt_base_rt_queue_correlation"] <= 1
+
+
 def test_calibration_uses_only_ok_minutes():
     s = synthetic_clean()
     s.loc[100:200, "cpu"] = 0.99                    # corrupted minutes...

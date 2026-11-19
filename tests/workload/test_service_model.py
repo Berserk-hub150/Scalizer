@@ -82,6 +82,29 @@ def test_sampled_parameters_vary_around_the_nominal_ones(tmp_path):
     assert model.predict(600, 12).cpu != pytest.approx(p.cpu, rel=1e-9)
 
 
+def test_correlated_parameters_are_drawn_together(tmp_path):
+    model = analyzer(tmp_path, noise=0.003).get_service_model("api", "v1")
+    expected = model.calibration.cpu_model.a_b_correlation
+    rng = np.random.default_rng(1)
+    samples = [model.sample_parameters(rng) for _ in range(3000)]
+    observed = np.corrcoef([s.a for s in samples], [s.b for s in samples])[0, 1]
+    assert observed == pytest.approx(expected, abs=0.05)
+    # the same seed gives the same parameters
+    again = model.sample_parameters(np.random.default_rng(1))
+    assert again == samples[0]
+
+
+def test_older_calibrations_without_correlations_still_load(tmp_path):
+    from scalizer.workload import CalibratedServiceModel, Calibration
+    cal = analyzer(tmp_path).get_calibration("api", "v1").model_dump(mode="json")
+    for block, key in (("cpu_model", "a_b_correlation"),
+                       ("latency_model", "rt_base_rt_queue_correlation")):
+        del cal[block][key]
+    model = CalibratedServiceModel(Calibration.model_validate(cal))
+    assert model.calibration.cpu_model.a_b_correlation == 0.0       # drawn independently
+    model.sample_parameters(np.random.default_rng(0))
+
+
 def test_instances_for_a_target(model):
     n = model.instances_for(load=1100, target_cpu=0.5)
     assert model.predict(1100, n).cpu <= 0.5 < model.predict(1100, n - 1).cpu

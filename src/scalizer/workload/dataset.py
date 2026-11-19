@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from .calibrate import CPU_FORMULA, LATENCY_FORMULA, add_features, calibrate
+from .calibrate import CPU_FORMULA, INTERVAL_METHOD, LATENCY_FORMULA, add_features, calibrate
 from .contracts import CalibrationParams
 from .interfaces import RAW_OPTIONAL_COLUMNS
 
@@ -45,7 +45,8 @@ def make_dataset(service: str, clean: pd.DataFrame, version: str = "v1",
 
     `source` is the SourceDescription: its load unit and CPU basis say what the
     numbers of the models mean. The data_version is a hash of the series, of
-    both parameter sets and of the forms of the models: any change gives a new one.
+    both parameter sets, of the forms of the models and of the way the intervals
+    are estimated: any change gives a new one.
     """
     if source is not None and hasattr(source, "model_dump"):
         source = source.model_dump(mode="json")
@@ -61,7 +62,8 @@ def make_dataset(service: str, clean: pd.DataFrame, version: str = "v1",
 
     digest = hashlib.sha256()
     for part in (series.to_csv(index=False).encode(), cleaning_params,
-                 asdict(calibration_params), CPU_FORMULA, LATENCY_FORMULA):
+                 asdict(calibration_params), CPU_FORMULA, LATENCY_FORMULA,
+                 INTERVAL_METHOD):
         digest.update(part if isinstance(part, bytes)
                       else json.dumps(part, sort_keys=True, default=str).encode())
     calibration = {"service": service, "version": version,
