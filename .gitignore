@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+
+# Trace data and generated outputs: never commit them
+data/
+agg*/
+output/
+*.tar.gz
+*.csv.gz
+
+# Editors and office lock files
+.~lock.*#
+.vscode/
+.idea/
+.DS_Store
