@@ -48,3 +48,20 @@ Scalizer/
 ## Data
 
 [Alibaba Cluster Trace](https://github.com/alibaba/clusterdata), microservices v2022: 13 days of per-minute call rates, response times and CPU/memory usage of production microservices. Published for research and study; see Luo et al., *The Power of Prediction: Microservice Auto Scaling via Workload Learning*, ACM SoCC 2022.
+
+## Workload API
+
+The FastAPI adapter accepts the agreed `services`, `start`, `end` and `version`
+inputs, processes workloads in a background job, and serves paginated series and
+calibration JSON for the React frontend. It also accepts canonical CSV uploads.
+
+```powershell
+py -m pip install -r requirements-api.txt
+$env:PYTHONPATH = "$PWD\src"
+py -m uvicorn scalizer.api.main:create_app --factory --host 127.0.0.1 --port 8000
+```
+
+Open <http://127.0.0.1:8000/docs>. See [the API contract and local demo guide](docs/API.md)
+for Keycloak configuration, request/response examples and inspection of existing
+datasets. Simulation endpoints will be added with the Simulation Engine.
+
